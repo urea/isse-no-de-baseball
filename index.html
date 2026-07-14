@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>いっせーのーで野球</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        html, body, #root { height:100%; overflow:hidden; }
+        body { background: #071426; }
+        .game-shell { height:100dvh; }
+        .ballpark { background: url('./assets/stadium-night-clear.png') center center / cover no-repeat; }
+        .stadium-lights, .stands { display:none; }
+        .field-grass { background: repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 11px, transparent 11px 22px); }
+        .pet-sprite { width:96px; height:104px; background-repeat:no-repeat; background-size:800% 1100%; image-rendering:pixelated; filter:drop-shadow(0 8px 4px rgba(0,0,0,.5)); }
+        .pet-player { background-image:url('./assets/codex-pet.webp'); }
+        .pet-cpu { background-image:url('./assets/fireball-pet.webp'); animation-delay:-1.1s; }
+        .speech-row { display:flex; justify-content:space-between; gap:10px; }
+        .speech-bubble { position:relative; flex:1; min-height:48px; padding:9px 10px; border-radius:12px; color:#111827; font-size:12px; font-weight:700; line-height:1.25; box-shadow:0 3px 9px rgba(0,0,0,.35); }
+        .player-speech { background:#dff8ff; }
+        .fireball-speech { background:#fff4f4; }
+        .player-speech::after, .fireball-speech::after { content:''; position:absolute; bottom:-9px; width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; }
+        .player-speech::after { left:30px; border-top:10px solid #dff8ff; }
+        .fireball-speech::after { right:30px; border-top:10px solid #fff4f4; }
+        .pet-sprite.is-pointing { animation: point-pop .55s ease-in-out infinite alternate; filter:drop-shadow(0 0 12px #facc15); }
+        .pet-sprite.is-jumping { background-position:0 40%; animation:pet-jumping .7s steps(1, end) infinite; filter:drop-shadow(0 0 13px #facc15); }
+        .pet-sprite.is-failed { background-position:0 50%; animation:pet-failed 1.05s steps(1, end) infinite; filter:drop-shadow(0 5px 5px rgba(0,0,0,.65)); }
+        .base { box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 rgba(0,0,0,.25); }
+        .base.is-occupied { box-shadow: 0 0 13px #facc15, inset 0 1px 0 #fff; }
+        .baseball-card { background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(220,245,255,.82)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.7), 0 7px 0 rgba(0,0,0,.22), 0 12px 17px rgba(0,0,0,.35); }
+        .baseball-card::before { content:''; position:absolute; inset:5px; border:1px solid currentColor; border-radius:.55rem; opacity:.28; pointer-events:none; }
+        .baseball-card:hover:not(:disabled) { filter:brightness(1.1); }
+        .card-holo { position:absolute; inset:0; border-radius:.6rem; background:linear-gradient(125deg, transparent 25%, rgba(255,255,255,.72) 45%, transparent 63%); mix-blend-mode:screen; pointer-events:none; }
+        .card-hr { background: linear-gradient(145deg, #fff6b0, #f59e0b 46%, #dc2626); color:#7f1d1d; }
+        .score-panel { background:linear-gradient(180deg, rgba(5,11,20,.94), rgba(10,22,39,.86)); border-bottom:1px solid rgba(255,255,255,.18); }
+        .batting-row { background:rgba(250,204,21,.1); }
+        .score-team-cell { position:relative; }
+        .batting-mark { position:absolute; left:-6px; top:50%; display:flex; align-items:center; justify-content:center; width:11px; height:11px; border-radius:9999px; background:#facc15; color:#713f12; font-size:7px; box-shadow:0 0 4px rgba(250,204,21,.7); transform:translateY(-50%); }
+        .countdown-burst { text-shadow:0 3px 0 #7c2d12, 0 0 18px rgba(255,255,255,.8); animation: countdown-burst .72s ease-out both; }
+        .impact-text { color:#fff7b2; -webkit-text-stroke:2px #9a3412; text-shadow:0 5px 0 #7c2d12, 0 0 22px #f59e0b; transform:rotate(-7deg); animation:impact-pop .7s cubic-bezier(.18,.9,.3,1) both; }
+        .cheer-text { color:#fff; text-shadow:0 2px 0 #7c2d12, 0 0 13px #fb923c; animation:cheer-pop .7s ease-out both; }
+        .out-text { color:#e2e8f0; -webkit-text-stroke:2px #334155; text-shadow:0 5px 0 #0f172a, 0 0 18px #fff; transform:rotate(5deg); animation:impact-pop .6s cubic-bezier(.18,.9,.3,1) both; }
+        .selected-player { box-shadow:0 0 0 4px #38bdf8, 0 0 18px #38bdf8, 0 7px 0 rgba(0,0,0,.22), 0 12px 17px rgba(0,0,0,.35); }
+        .selected-cpu { box-shadow:0 0 0 4px #fb7185, 0 0 18px #fb7185, 0 7px 0 rgba(0,0,0,.22), 0 12px 17px rgba(0,0,0,.35); }
+        .selected-match { box-shadow:0 0 0 5px #fde047, 0 0 22px #facc15, 0 7px 0 rgba(0,0,0,.22), 0 12px 17px rgba(0,0,0,.35); animation:match-card .55s ease-in-out infinite alternate; }
+        .selection-chip { position:absolute; z-index:10; top:-12px; min-width:34px; height:22px; padding:0 6px; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900; color:white; border:2px solid white; box-shadow:0 2px 5px rgba(0,0,0,.45); }
+        .chip-player { left:-13px; background:#0284c7; }
+        .chip-cpu { right:-13px; background:#e11d48; }
+        .match-chip { position:absolute; z-index:11; bottom:-13px; left:50%; transform:translateX(-50%); padding:3px 8px; border-radius:9999px; background:#facc15; color:#713f12; font-size:10px; font-weight:900; border:2px solid white; box-shadow:0 2px 6px rgba(0,0,0,.45); }
+        .opponent-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:7px; }
+        .start-panel { height:320px; }
+        .rules-panel { display:flex; flex-direction:column; justify-content:center; }
+        .opponent-profile { margin-top:10px; padding:8px 10px; border-radius:10px; border:1px solid rgba(125,211,252,.42); background:rgba(8,47,73,.58); text-align:left; }
+        .opponent-card { position:relative; min-height:72px; padding:5px 2px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(3,12,25,.7); color:#dbeafe; transition:transform .15s, border-color .15s, background .15s; }
+        .opponent-card:hover { transform:translateY(-2px); border-color:#facc15; }
+        .opponent-card.is-selected { border:2px solid #facc15; background:rgba(146,93,9,.55); color:#fff7b2; box-shadow:0 0 11px rgba(250,204,21,.65); }
+        .opponent-sprite { width:39px; height:43px; margin:0 auto 2px; background-repeat:no-repeat; background-size:800% 1100%; image-rendering:pixelated; }
+        .win-star { position:absolute; top:-7px; right:-5px; display:grid; place-items:center; width:19px; height:19px; border:1px solid #fef08a; border-radius:9999px; background:#ca8a04; color:#fffde7; font-size:13px; line-height:1; box-shadow:0 1px 5px rgba(0,0,0,.5); }
+        .dealt-card { animation:deal-card .48s cubic-bezier(.18,.9,.24,1) both; }
+        .deal-up { --deal-x:0px; --deal-y:105vh; animation-delay:.06s; }
+        .deal-left { --deal-x:-105vw; --deal-y:75vh; animation-delay:.16s; }
+        .deal-right { --deal-x:105vw; --deal-y:75vh; animation-delay:.26s; }
+        .ball-flight { position:absolute; width:18px; height:18px; border-radius:50%; background:repeating-linear-gradient(45deg, #fff 0 3px, #ef4444 3px 4px, #fff 4px 7px); box-shadow:0 0 15px white; animation: ball-flight 1.3s ease-out both; }
+        @keyframes pet-jumping { 0% { background-position:0% 40%; } 20% { background-position:14.2857% 40%; } 40% { background-position:28.5714% 40%; } 60% { background-position:42.8571% 40%; } 80%, 100% { background-position:57.1429% 40%; } }
+        @keyframes pet-failed { 0% { background-position:0% 50%; } 12.5% { background-position:14.2857% 50%; } 25% { background-position:28.5714% 50%; } 37.5% { background-position:42.8571% 50%; } 50% { background-position:57.1429% 50%; } 62.5% { background-position:71.4286% 50%; } 75% { background-position:85.7143% 50%; } 87.5%, 100% { background-position:100% 50%; } }
+        @keyframes point-pop { to { transform:translateY(-11px) scale(1.08) rotate(-3deg); } }
+        @keyframes countdown-burst { 0% { opacity:0; transform:scale(.4) rotate(-8deg); } 45% { opacity:1; transform:scale(1.18) rotate(2deg); } 100% { opacity:0; transform:scale(1.65) rotate(0); } }
+        @keyframes impact-pop { 0% { opacity:0; transform:scale(.4) rotate(-14deg); } 60% { opacity:1; transform:scale(1.16) rotate(-5deg); } 100% { opacity:1; transform:scale(1) rotate(-7deg); } }
+        @keyframes cheer-pop { 0%,35% { opacity:0; transform:translateY(16px) scale(.7); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes match-card { to { transform:translateY(-6px) scale(1.07); } }
+        @keyframes deal-card { from { opacity:0; transform:translate(var(--deal-x), var(--deal-y)) rotate(-14deg) scale(.72); } to { opacity:1; transform:translate(0, 0) rotate(0) scale(1); } }
+        @keyframes ball-flight { 0% { left:44%; bottom:33%; transform:scale(.7); } 100% { left:78%; bottom:75%; transform:scale(1.35); opacity:0; } }
+        @media (max-height: 760px) {
+            .game-field { width:11.5rem !important; height:11.5rem !important; }
+            .baseball-card { width:4.1rem !important; height:5rem !important; }
+            .pet-sprite { width:78px; height:85px; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const OPPONENTS = {
+            dewey: { name: 'Dewey', asset: './assets/opponents/dewey-spritesheet-v5-D1KFAW8x.webp', style: 'single', profile: 'きれいに一歩ずつ進める、穏やかな堅実派。', tendency: '単打を好み、無理な長打はあまり選ばない。', selecting: ['まずは、ひとつずつ。', '急がなくても大丈夫。'], win: ['きれいにつながったね。'], lose: ['整えて、もう一度。'] },
+            fireball: { name: 'Fireball', asset: './assets/opponents/fireball-spritesheet-v5-CcKkFG0_.webp', style: 'long', profile: '勢いと派手さを好む、熱血パワー型。', tendency: '二塁打以上が見えると、つい強気に寄る。', selecting: ['長打だけは打たせん！', '一発、狙っていくぜ！', '派手に決めようか！'], win: ['もらったァ！', '火がついたぜ！'], lose: ['チッ、次は逃がさない！'] },
+            hoots: { name: 'Hoots', asset: './assets/opponents/hoots-spritesheet-v8-hys0ZOs6.webp', style: 'counter', profile: '観察眼の鋭い、静かな読み返し型。', tendency: '前回あなたが選んだ位置を外しにくる。', selecting: ['その視線、見えているよ。', '前と同じ手かな？'], win: ['見通しどおり。'], lose: ['ほう、そこを選んだか。'] },
+            rocky: { name: 'Rocky', asset: './assets/opponents/rocky-spritesheet-v5-CXtdFM3V.webp', style: 'double', profile: '大きな差分にも動じない、安定型。', tendency: '二塁打を中心に、同じ基準を崩さない。', selecting: ['焦らず、確かな一手を。', '崩さず進もう。'], win: ['積み上げた結果だ。'], lose: ['土台は揺らがない。'] },
+            seedy: { name: 'Seedy', asset: './assets/opponents/seedy-spritesheet-v10-A9vkGoq7.webp', style: 'wild', profile: '新しい芽を探す、ひらめき型。', tendency: '定石に寄らず、ときどきHRにも飛びつく。', selecting: ['こっちに、なにかありそう！', '新しい一手、試してみよう。'], win: ['ほら、芽が出た！'], lose: ['今回は土の中だったかも。'] },
+            stacky: { name: 'Stacky', asset: './assets/opponents/stacky-spritesheet-v6-Y0DWcgq_.webp', style: 'best', profile: '一手ずつ積み上げる、計算型。', tendency: '場にある最も価値の高いカードを狙いやすい。', selecting: ['順番に積めば、答えになる。', 'ここは期待値を取る。'], win: ['一段ずつ、上へ。'], lose: ['スタックを積み直す。'] },
+            bsod: { name: 'BSOD', asset: './assets/opponents/bsod-spritesheet-v5-DMVBNs4E.webp', style: 'random', profile: '予測がつかない、ちょっと困ったコメディ型。', tendency: '選択はランダム。セリフもあまり当てにならない。', selecting: ['えっと……こっち？', '一瞬、画面が青くなった。'], win: ['たまたま通った！？'], lose: ['例外が発生しました……。'] },
+            nullsignal: { name: 'Null Signal', asset: './assets/opponents/null-signal-spritesheet-v7-B59v4kgD.webp', style: 'silent', profile: 'ほぼ話さず、気配を隠すミステリアス型。', tendency: '規則性を見せず、セリフからも読みにくい。', selecting: ['……', 'signal lost'], win: ['……confirmed'], lose: ['……noise'] }
+        };
+        const OPPONENT_LIST = Object.entries(OPPONENTS);
+        const ACHIEVEMENT_KEY = 'isse-no-de-baseball.wins.v1';
+        const DIRECTIONS = ['UP', 'LEFT', 'RIGHT'];
+        const pick = (items) => items[Math.floor(Math.random() * items.length)];
+
+        const chooseCpuDirection = (opponent, boardCards, previousPlayerDirection) => {
+            const directionsFor = (types) => DIRECTIONS.filter(direction => types.includes(boardCards[direction]));
+            const randomDirection = () => pick(DIRECTIONS);
+            const highestDirection = () => DIRECTIONS.reduce((best, direction) => ({ '1BH': 1, '2BH': 2, '3BH': 3, 'HR': 4 }[boardCards[direction]] > { '1BH': 1, '2BH': 2, '3BH': 3, 'HR': 4 }[boardCards[best]] ? direction : best), DIRECTIONS[0]);
+            const preferred = (types, chance = .7) => {
+                const candidates = directionsFor(types);
+                return candidates.length > 0 && Math.random() < chance ? pick(candidates) : randomDirection();
+            };
+            if (opponent.style === 'single') return preferred(['1BH'], .75);
+            if (opponent.style === 'long') return preferred(['HR', '3BH', '2BH'], .75);
+            if (opponent.style === 'double') return preferred(['2BH'], .8);
+            if (opponent.style === 'best') return Math.random() < .85 ? highestDirection() : randomDirection();
+            if (opponent.style === 'counter' && previousPlayerDirection) return pick(DIRECTIONS.filter(direction => direction !== previousPlayerDirection));
+            if (opponent.style === 'wild') return preferred(['HR'], .45);
+            return randomDirection();
+        };
+
+        // デッキ生成 (50枚: 1BH=32, 2BH=11, 3BH=2, HR=5)
+        const buildDeck = () => {
+            let deck = [];
+            for(let i=0; i<32; i++) deck.push('1BH');
+            for(let i=0; i<11; i++) deck.push('2BH');
+            for(let i=0; i<2; i++) deck.push('3BH');
+            for(let i=0; i<5; i++) deck.push('HR');
+
+            // シャッフル
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+            return deck;
+        };
+
+        // カードドロー処理
+        const drawCards = (currentDeck, discard) => {
+            let deckToDraw = [...currentDeck];
+            let newDiscard = [...discard];
+            if (deckToDraw.length < 3) {
+                deckToDraw = buildDeck(); // リシャッフル（簡略化のため新規構築）
+                newDiscard = [];
+            }
+            const drawn = deckToDraw.splice(0, 3);
+            return { drawn, remainingDeck: deckToDraw, newDiscard };
+        };
+
+        // ヒットによる進塁処理
+        const processHit = (hitType, currentRunners) => {
+            let runs = 0;
+            let newRunners = [false, false, false];
+            let positions = [];
+
+            if (currentRunners[0]) positions.push(1);
+            if (currentRunners[1]) positions.push(2);
+            if (currentRunners[2]) positions.push(3);
+            positions.push(0); // 打者
+
+            let advance = 0;
+            if (hitType === '1BH') advance = 1;
+            if (hitType === '2BH') advance = 2;
+            if (hitType === '3BH') advance = 3;
+            if (hitType === 'HR') advance = 4;
+
+            positions.forEach(pos => {
+                let newPos = pos + advance;
+                if (newPos >= 4) {
+                    runs++;
+                } else {
+                    newRunners[newPos - 1] = true;
+                }
+            });
+            return { newRunners, runs };
+        };
+
+        // UIコンポーネント: カード
+        const Card = ({ type, direction, onSelect, disabled = false, playerSelected = false, cpuSelected = false, dealClass = '' }) => {
+            const colors = {
+                '1BH': 'bg-blue-100 text-blue-800 border-blue-500',
+                '2BH': 'bg-yellow-100 text-yellow-800 border-yellow-500',
+                '3BH': 'bg-orange-100 text-orange-800 border-orange-500',
+                'HR': 'card-hr border-yellow-200'
+            };
+            const copy = { '1BH': ['SINGLE', '⚾'], '2BH': ['DOUBLE', '⚾⚾'], '3BH': ['TRIPLE', '✦'], 'HR': ['HOME RUN', '★'] };
+            return (
+                <button
+                    type="button"
+                    onClick={onSelect}
+                    disabled={disabled}
+                    aria-label={`${direction}の${type}カードを選ぶ`}
+                    className={`baseball-card ${dealClass} relative w-[4.8rem] h-24 sm:w-24 sm:h-28 border-4 rounded-xl flex flex-col items-center justify-center font-black shadow-lg ${colors[type]} ${playerSelected && cpuSelected ? 'selected-match' : playerSelected ? 'selected-player' : cpuSelected ? 'selected-cpu' : ''} ${disabled ? 'cursor-default opacity-85' : 'cursor-pointer hover:-translate-y-2 hover:scale-105 hover:shadow-xl active:translate-y-0 active:scale-100 transition-transform focus:outline-none focus:ring-4 focus:ring-white focus:ring-offset-2 focus:ring-offset-green-900'}`}
+                >
+                    {playerSelected && <span className="selection-chip chip-player">YOU</span>}
+                    {cpuSelected && <span className="selection-chip chip-cpu">CPU</span>}
+                    {playerSelected && cpuSelected && <span className="match-chip">MATCH!</span>}
+                    <span className="text-2xl leading-none">{copy[type][1]}</span>
+                    <span className="text-[10px] tracking-widest mt-1">{copy[type][0]}</span>
+                    <span className="text-lg leading-none">{type}</span>
+                    {type === 'HR' && <span className="card-holo"></span>}
+                </button>
+            );
+        };
+
+        const App = () => {
+            const [turnState, setTurnState] = useState('START'); // START, SELECTING, RESULT, GAME_OVER
+
+            const [deck, setDeck] = useState([]);
+            const [discardPile, setDiscardPile] = useState([]);
+            const [boardCards, setBoardCards] = useState(null);
+            const [dealSequence, setDealSequence] = useState(0);
+            const [opponentId, setOpponentId] = useState('fireball');
+            const [showOpponentSelect, setShowOpponentSelect] = useState(false);
+            const [wins, setWins] = useState(() => {
+                try { return JSON.parse(localStorage.getItem(ACHIEVEMENT_KEY)) || {}; }
+                catch { return {}; }
+            });
+            const [gameOutcome, setGameOutcome] = useState(null);
+
+            const [inning, setInning] = useState(1);
+            const [isTop, setIsTop] = useState(true); // true: プレイヤー攻撃
+            const [outs, setOuts] = useState(0);
+            const [runners, setRunners] = useState([false, false, false]);
+
+            const [scorePlayer, setScorePlayer] = useState(0);
+            const [scoreCpu, setScoreCpu] = useState(0);
+            const [hitsPlayer, setHitsPlayer] = useState(0);
+            const [hitsCpu, setHitsCpu] = useState(0);
+
+            const [scoreBoardPlayer, setScoreBoardPlayer] = useState([null, null, null]);
+            const [scoreBoardCpu, setScoreBoardCpu] = useState([null, null, null]);
+
+            const [lastResult, setLastResult] = useState(null);
+            const [pendingRound, setPendingRound] = useState(null);
+            const [lastPlayerDirection, setLastPlayerDirection] = useState(null);
+
+            const [cpuMessage, setCpuMessage] = useState('');
+            const [playerMessage, setPlayerMessage] = useState('');
+            const [sfxMessage, setSfxMessage] = useState('');
+            const opponent = OPPONENTS[opponentId];
+
+            const playSound = (kind) => {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return;
+                const ctx = new Ctx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const tones = { select: [620, .06], reveal: [360, .11], hit: [880, .18], out: [150, .22] };
+                const [frequency, duration] = tones[kind];
+                osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(kind === 'out' ? 70 : frequency * 1.45, ctx.currentTime + duration);
+                gain.gain.setValueAtTime(.06, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + duration);
+                osc.connect(gain).connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + duration);
+            };
+
+            // セリフ生成ヘルパー
+            const getCpuSelectingMessage = () => pick(opponent.selecting);
+
+            const getPlayerSelectingMessage = (isTopAttack) => {
+                const offMsgs = ["よし、ここで勝負！", "どこで合わせよう…", "一発、狙ってみる！", "読み切ってみせる！"];
+                const defMsgs = ["ここは外したい…", "読ませないぞ！", "ぴたりと止める！", "さて、どこだ？"];
+                const msgs = isTopAttack ? offMsgs : defMsgs;
+                return msgs[Math.floor(Math.random() * msgs.length)];
+            };
+
+            const getCpuResultMessage = (isTopAttack, isHit) => {
+                const cpuWon = isTopAttack ? !isHit : isHit;
+                return pick(cpuWon ? opponent.win : opponent.lose);
+            };
+
+            const getPlayerResultMessage = (isTopAttack, isHit) => {
+                const playerWon = isTopAttack ? isHit : !isHit;
+                if (playerWon) return ["よし、読めた！", "ぴったり！", "この調子！"][Math.floor(Math.random() * 3)];
+                return ["うわ、外した…", "次は合わせる！", "くっ、読まれた…"][Math.floor(Math.random() * 3)];
+            };
+
+            const getSfxMessage = (isHit, hitType, runsScored) => {
+                 if (isHit) {
+                     if (hitType === 'HR') return "「カキィィィィン！！」\nワアアアアアア！！（大歓声）";
+                     if (runsScored > 0) return "「カキンッ！」\nワアアアア！！（歓喜）";
+                     return "「カキンッ！」\nワァァ…（歓声）";
+                 } else {
+                     return "「ズバァァン！！」\nアウトォォ！";
+                 }
+            };
+
+            const startGame = () => {
+                const initialDeck = buildDeck();
+                const { drawn, remainingDeck } = drawCards(initialDeck, []);
+
+                setDeck(remainingDeck);
+                setDiscardPile([]);
+                setBoardCards({ UP: drawn[0], LEFT: drawn[1], RIGHT: drawn[2] });
+                setDealSequence(sequence => sequence + 1);
+                setLastPlayerDirection(null);
+                setGameOutcome(null);
+
+                setInning(1);
+                setIsTop(true);
+                setOuts(0);
+                setRunners([false, false, false]);
+                setScorePlayer(0);
+                setScoreCpu(0);
+                setHitsPlayer(0);
+                setHitsCpu(0);
+                setScoreBoardPlayer([0, null, null]);
+                setScoreBoardCpu([null, null, null]);
+
+                setCpuMessage(getCpuSelectingMessage(true));
+                setPlayerMessage(getPlayerSelectingMessage(true));
+                setSfxMessage('');
+
+                setTurnState('SELECTING');
+            };
+
+            const handleAction = (dir) => {
+                if (turnState !== 'SELECTING') return;
+                playSound('select');
+                const cpuDir = chooseCpuDirection(opponent, boardCards, lastPlayerDirection);
+                setLastPlayerDirection(dir);
+                setPendingRound({ playerDir: dir, cpuDir });
+                setCpuMessage('いっせーのーで…！');
+                setPlayerMessage('いっせーのーで…！');
+                setTurnState('REVEALING');
+                window.setTimeout(() => resolveRound(dir, cpuDir), 720);
+            };
+
+            const resolveRound = (playerDir, cpuDir) => {
+                // お互いに、いっせーのーで3方向のどれかを指す
+
+                const isHit = playerDir === cpuDir;
+                let hitType = null;
+                let runsScored = 0;
+                let currentOuts = outs;
+
+                if (isHit) {
+                    hitType = boardCards[isTop ? playerDir : cpuDir];
+                    const { newRunners, runs } = processHit(hitType, runners);
+                    runsScored = runs;
+                    setRunners(newRunners);
+
+                    if (isTop) {
+                        setHitsPlayer(h => h + 1);
+                        if (runs > 0) {
+                            setScorePlayer(s => s + runs);
+                            const newBoard = [...scoreBoardPlayer];
+                            newBoard[inning - 1] = (newBoard[inning - 1] || 0) + runs;
+                            setScoreBoardPlayer(newBoard);
+                        }
+                    } else {
+                        setHitsCpu(h => h + 1);
+                        if (runs > 0) {
+                            setScoreCpu(s => s + runs);
+                            const newBoard = [...scoreBoardCpu];
+                            newBoard[inning - 1] = (newBoard[inning - 1] || 0) + runs;
+                            setScoreBoardCpu(newBoard);
+                        }
+                    }
+                } else {
+                    currentOuts++;
+                    setOuts(currentOuts);
+                }
+
+                setCpuMessage(getCpuResultMessage(isTop, isHit, hitType));
+                setPlayerMessage(getPlayerResultMessage(isTop, isHit));
+                setSfxMessage(getSfxMessage(isHit, hitType, runsScored));
+
+                setLastResult({ playerDir, cpuDir, isHit, hitType, runsScored });
+                setPendingRound(null);
+                playSound(isHit ? 'hit' : 'out');
+                setTurnState('RESULT');
+            };
+
+            const nextAtBat = () => {
+                let nextIsTop = isTop;
+                let nextInning = inning;
+                let nextOuts = outs;
+                let nextRunners = runners;
+                let nextBoardP = [...scoreBoardPlayer];
+                let nextBoardC = [...scoreBoardCpu];
+
+                if (outs >= 3) {
+                    nextOuts = 0;
+                    nextRunners = [false, false, false];
+                    if (isTop) {
+                        nextIsTop = false;
+                        nextBoardC[inning - 1] = 0;
+                    } else {
+                        nextIsTop = true;
+                        nextInning++;
+                        if (nextInning <= 3) {
+                            nextBoardP[nextInning - 1] = 0;
+                        }
+                    }
+                }
+
+                if (nextInning > 3) {
+                    const playerWon = scorePlayer > scoreCpu;
+                    if (playerWon) {
+                        const updatedWins = { ...wins, [opponentId]: true };
+                        setWins(updatedWins);
+                        try { localStorage.setItem(ACHIEVEMENT_KEY, JSON.stringify(updatedWins)); } catch {}
+                    }
+                    setGameOutcome(playerWon ? 'YOU WIN!' : scorePlayer < scoreCpu ? 'CPU WIN' : 'DRAW');
+                    setTurnState('GAME_OVER');
+                    return;
+                }
+
+                setIsTop(nextIsTop);
+                setInning(nextInning);
+                setOuts(nextOuts);
+                setRunners(nextRunners);
+                setScoreBoardPlayer(nextBoardP);
+                setScoreBoardCpu(nextBoardC);
+
+                const { drawn, remainingDeck, newDiscard } = drawCards(deck, discardPile);
+                setDeck(remainingDeck);
+                setDiscardPile([...newDiscard, boardCards.UP, boardCards.LEFT, boardCards.RIGHT]);
+                setBoardCards({ UP: drawn[0], LEFT: drawn[1], RIGHT: drawn[2] });
+                setDealSequence(sequence => sequence + 1);
+
+                setCpuMessage(getCpuSelectingMessage(nextIsTop));
+                setPlayerMessage(getPlayerSelectingMessage(nextIsTop));
+                setSfxMessage('');
+
+                setTurnState('SELECTING');
+            };
+
+            if (turnState === 'GAME_OVER') {
+                const playerWon = scorePlayer > scoreCpu;
+                return (
+                    <div className="ballpark max-w-md mx-auto min-h-screen relative overflow-hidden flex flex-col items-center justify-center p-4 text-center">
+                        <div className="stadium-lights"></div><div className="stands"></div>
+                        <div className="relative z-10 flex items-end gap-9 mb-5">
+                            <div><div className="pet-sprite pet-player is-jumping"></div><span className="text-xs font-bold text-cyan-200">YOU</span></div>
+                            <div><div className={`pet-sprite pet-cpu ${playerWon ? 'is-failed' : 'is-jumping'}`} style={{backgroundImage:`url(${opponent.asset})`}}></div><span className="text-xs font-bold text-red-200">{opponent.name}</span></div>
+                        </div>
+                        <div className="relative z-10 w-full max-w-sm rounded-2xl border border-yellow-100/60 bg-slate-950/75 p-6 shadow-xl">
+                            <div className="text-4xl font-black text-yellow-300 drop-shadow-[0_3px_0_#7c2d12]">{gameOutcome}</div>
+                            <p className="mt-3 text-xl font-black text-white">YOU {scorePlayer} - {scoreCpu} CPU</p>
+                            {playerWon && <p className="mt-3 font-bold text-yellow-100">★ {opponent.name} に勝利！</p>}
+                            <button onClick={() => { setTurnState('START'); setShowOpponentSelect(false); }} className="mt-6 rounded-full border-2 border-yellow-100 bg-gradient-to-b from-yellow-400 to-orange-600 px-8 py-3 text-lg font-black text-white shadow-[0_4px_0_#7c2d12]">タイトルへ</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (turnState === 'START') {
+                return (
+                    <div className="ballpark max-w-md mx-auto min-h-screen relative overflow-hidden flex flex-col items-center justify-center p-4 text-center">
+                        <div className="stadium-lights"></div><div className="stands"></div>
+                        <div className="relative z-10 flex items-end gap-9 mb-3">
+                            <div><div className="pet-sprite pet-player"></div><span className="text-xs font-bold text-cyan-200">YOU</span></div>
+                            <div><div className="pet-sprite pet-cpu" style={{backgroundImage:`url(${opponent.asset})`}}></div><span className="text-xs font-bold text-red-200">{opponent.name}</span></div>
+                        </div>
+                        <h1 className="relative z-10 text-4xl font-black mb-2 text-yellow-300 drop-shadow-[0_3px_0_#7c2d12]">いっせーのーで野球</h1>
+                        {showOpponentSelect ? (
+                            <div className="start-panel relative z-10 mb-4 w-full max-w-sm rounded-2xl border border-yellow-200/40 bg-slate-950/75 px-3 py-3 shadow-xl">
+                                <h2 className="text-center text-lg font-black text-yellow-300 mb-2">対戦相手を選ぶ</h2>
+                                <div className="opponent-grid">
+                                    {OPPONENT_LIST.map(([id, character]) => <button key={id} onClick={() => { setOpponentId(id); playSound('select'); }} className={`opponent-card ${opponentId === id ? 'is-selected' : ''}`} aria-label={`${character.name}を選択`}>
+                                        {wins[id] && <span className="win-star" aria-label="勝利済み">★</span>}
+                                        <span className="opponent-sprite" style={{backgroundImage:`url(${character.asset})`}}></span>
+                                        <span className="block text-[10px] font-bold leading-tight">{character.name}</span>
+                                    </button>)}
+                                </div>
+                                <div className="opponent-profile">
+                                    <div className="text-sm font-black text-cyan-100">{opponent.name}</div>
+                                    <p className="mt-1 text-xs leading-snug text-blue-50">{opponent.profile}</p>
+                                    <p className="mt-1 text-xs leading-snug text-yellow-100"><span className="font-black text-yellow-300">傾向：</span>{opponent.tendency}</p>
+                                    <p className="mt-1 text-xs font-bold text-white">「{opponent.selecting[0]}」</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="start-panel rules-panel relative z-10 mb-4 w-full max-w-sm rounded-2xl border border-white/20 bg-slate-950/55 px-5 py-4 text-left shadow-xl">
+                                <h2 className="text-center text-lg font-black text-yellow-300">ルール・遊び方</h2>
+                                <ol className="mt-2 space-y-1.5 text-sm leading-relaxed text-blue-50">
+                                    <li><span className="font-black text-yellow-300">1.</span> 場に3枚のヒットカードが並びます。</li>
+                                    <li><span className="font-black text-yellow-300">2.</span> 「いっせーのーで！」でカードを1枚選びます。</li>
+                                    <li><span className="font-black text-yellow-300">3.</span> CPUと同じ位置のカードを選べばヒット！ カードの種類が打球になります。</li>
+                                    <li><span className="font-black text-yellow-300">4.</span> 違う位置ならアウト。3イニングで多く得点した方の勝ちです。</li>
+                                </ol>
+                            </div>
+                        )}
+                        <button onClick={() => setShowOpponentSelect(!showOpponentSelect)} className="relative z-10 mb-3 rounded-full border border-cyan-200/60 bg-slate-950/70 px-5 py-2 text-sm font-bold text-cyan-100 shadow">
+                            {showOpponentSelect ? '相手選択を閉じる' : `対戦相手：${opponent.name}　変更`}
+                        </button>
+                        <button onClick={() => { playSound('select'); startGame(); }} className="relative z-10 bg-gradient-to-b from-yellow-400 to-orange-600 border-2 border-yellow-100 text-white font-black py-4 px-12 rounded-full text-2xl shadow-[0_6px_0_#7c2d12] transition-transform transform hover:-translate-y-1 active:translate-y-1 active:shadow-none">
+                            プレイボール
+                        </button>
+                    </div>
+                );
+            }
+
+            const dirLabels = { UP: '上', LEFT: '左', RIGHT: '右' };
+            const playerResultMood = turnState === 'RESULT' ? ((isTop ? lastResult.isHit : !lastResult.isHit) ? 'is-jumping' : 'is-failed') : '';
+            const cpuResultMood = turnState === 'RESULT' ? ((isTop ? lastResult.isHit : !lastResult.isHit) ? 'is-failed' : 'is-jumping') : '';
+
+            return (
+                <div className="game-shell ballpark max-w-md mx-auto relative overflow-hidden flex flex-col">
+                    <div className="stadium-lights"></div>
+                    <div className="stands"></div>
+                    {/* ヘッダー＆スコアボード */}
+                    <div className="score-panel p-2 z-10">
+                        <table className="w-full text-center border-collapse text-sm mb-2">
+                            <thead>
+                                <tr>
+                                    <th className="p-1 w-12"></th>
+                                    <th className="p-1 text-gray-400">1</th>
+                                    <th className="p-1 text-gray-400">2</th>
+                                    <th className="p-1 text-gray-400">3</th>
+                                    <th className="p-1 text-yellow-300">R</th>
+                                    <th className="p-1 text-green-300">H</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className={`border-b border-gray-700 ${isTop ? 'batting-row' : ''}`}>
+                                    <td className="score-team-cell p-1 font-bold text-left pl-2">{isTop && <span className="batting-mark" aria-label="攻撃中">⚾</span>}YOU</td>
+                                    <td className="p-1">{scoreBoardPlayer[0] ?? '-'}</td>
+                                    <td className="p-1">{scoreBoardPlayer[1] ?? '-'}</td>
+                                    <td className="p-1">{scoreBoardPlayer[2] ?? '-'}</td>
+                                    <td className="p-1 font-bold text-yellow-300">{scorePlayer}</td>
+                                    <td className="p-1 text-green-300">{hitsPlayer}</td>
+                                </tr>
+                                <tr className={!isTop ? 'batting-row' : ''}>
+                                    <td className="score-team-cell p-1 font-bold text-left pl-2">{!isTop && <span className="batting-mark" aria-label="攻撃中">⚾</span>}CPU</td>
+                                    <td className="p-1">{scoreBoardCpu[0] ?? '-'}</td>
+                                    <td className="p-1">{scoreBoardCpu[1] ?? '-'}</td>
+                                    <td className="p-1">{scoreBoardCpu[2] ?? '-'}</td>
+                                    <td className="p-1 font-bold text-yellow-300">{scoreCpu}</td>
+                                    <td className="p-1 text-green-300">{hitsCpu}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div className="flex justify-between items-center px-2">
+                            <div className="text-lg font-bold text-yellow-400">
+                                {inning}回{isTop ? '表' : '裏'}
+                            </div>
+                            <div className="flex items-center gap-1 bg-gray-800 px-3 py-1 rounded-full">
+                                <span className="text-xs text-red-400 font-bold mr-1">OUT</span>
+                                <div className={`w-3 h-3 rounded-full ${outs >= 1 ? 'bg-red-500' : 'bg-gray-600'}`}></div>
+                                <div className={`w-3 h-3 rounded-full ${outs >= 2 ? 'bg-red-500' : 'bg-gray-600'}`}></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 両者の吹き出し */}
+                    <div className="px-4 py-2 h-20 mt-1 z-10">
+                        <div className="speech-row">
+                            {playerMessage && <div className="speech-bubble player-speech">{playerMessage}</div>}
+                            {cpuMessage && <div className="speech-bubble fireball-speech">{cpuMessage}</div>}
+                        </div>
+                    </div>
+
+                    {/* フィールド（ランナー表示） */}
+                    <div className="game-field relative w-56 h-56 mx-auto mt-3 flex-shrink-0 z-10">
+                        <div className="field-grass absolute inset-2 bg-green-600 transform rotate-45 border-4 border-[#f6dfb1] shadow-[0_0_18px_rgba(255,255,255,0.35)]"></div>
+                        <div className={`pet-sprite pet-cpu absolute -top-7 -right-7 z-20 ${turnState === 'REVEALING' ? 'is-pointing' : ''} ${cpuResultMood}`} style={{backgroundImage:`url(${opponent.asset})`}}></div>
+                        <div className={`pet-sprite pet-player absolute -top-7 -left-7 z-20 ${turnState === 'REVEALING' ? 'is-pointing' : ''} ${playerResultMood}`}></div>
+                        {turnState === 'RESULT' && lastResult.isHit && <div className="ball-flight z-30"></div>}
+                        {/* 1塁 */}
+                        <div className={`base absolute top-1/2 right-3 transform translate-x-1/2 -translate-y-1/2 w-6 h-6 border-2 border-gray-800 rotate-45 ${runners[0] ? 'is-occupied bg-yellow-400' : 'bg-white shadow-inner'}`}></div>
+                        {/* 2塁 */}
+                        <div className={`base absolute top-3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 border-2 border-gray-800 rotate-45 ${runners[1] ? 'is-occupied bg-yellow-400' : 'bg-white shadow-inner'}`}></div>
+                        {/* 3塁 */}
+                        <div className={`base absolute top-1/2 left-3 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 border-2 border-gray-800 rotate-45 ${runners[2] ? 'is-occupied bg-yellow-400' : 'bg-white shadow-inner'}`}></div>
+                        {/* 本塁 */}
+                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 w-6 h-6 bg-white border-2 border-gray-800 flex items-center justify-center text-[10px] font-bold" style={{clipPath: 'polygon(50% 0%, 100% 50%, 100% 100%, 0% 100%, 0% 50%)'}}>H</div>
+                    </div>
+
+                    {/* 盤面カード */}
+                    <div className="flex-grow flex items-center justify-center relative z-10">
+                        <div className="grid grid-cols-3 grid-rows-2 gap-2">
+                            <div className="col-start-2 row-start-1 flex justify-center"><Card key={`up-${dealSequence}`} dealClass="dealt-card deal-up" type={boardCards.UP} direction="上" onSelect={() => handleAction('UP')} disabled={turnState !== 'SELECTING'} playerSelected={turnState === 'RESULT' && lastResult.playerDir === 'UP'} cpuSelected={turnState === 'RESULT' && lastResult.cpuDir === 'UP'} /></div>
+                            <div className="col-start-1 row-start-2 flex justify-center"><Card key={`left-${dealSequence}`} dealClass="dealt-card deal-left" type={boardCards.LEFT} direction="左" onSelect={() => handleAction('LEFT')} disabled={turnState !== 'SELECTING'} playerSelected={turnState === 'RESULT' && lastResult.playerDir === 'LEFT'} cpuSelected={turnState === 'RESULT' && lastResult.cpuDir === 'LEFT'} /></div>
+                            <div className="col-start-2 row-start-2" aria-hidden="true"></div>
+                            <div className="col-start-3 row-start-2 flex justify-center"><Card key={`right-${dealSequence}`} dealClass="dealt-card deal-right" type={boardCards.RIGHT} direction="右" onSelect={() => handleAction('RIGHT')} disabled={turnState !== 'SELECTING'} playerSelected={turnState === 'RESULT' && lastResult.playerDir === 'RIGHT'} cpuSelected={turnState === 'RESULT' && lastResult.cpuDir === 'RIGHT'} /></div>
+                        </div>
+                    </div>
+
+                    {/* 盤面に直接出す打席結果 */}
+                    {turnState === 'RESULT' && (
+                        <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-40 pt-8">
+                            {lastResult.isHit ? <>
+                                <div className="impact-text text-5xl sm:text-6xl font-black">{lastResult.hitType === 'HR' ? 'ホームラン！！' : 'カキィィィン！'}</div>
+                                <div className="cheer-text mt-1 text-2xl font-black">ワアアアアア！！</div>
+                                <div className="mt-1 text-3xl font-black text-yellow-300 drop-shadow-[0_3px_0_#7c2d12]">{lastResult.hitType} !!</div>
+                            </> : <>
+                                <div className="out-text text-5xl sm:text-6xl font-black">ズバァァン！</div>
+                                <div className="mt-1 text-3xl font-black text-white drop-shadow-[0_3px_0_#0f172a]">OUT !</div>
+                            </>}
+                            {lastResult.runsScored > 0 && <p className="mt-1 text-lg font-black text-yellow-100 drop-shadow-[0_2px_0_#7c2d12]">{lastResult.runsScored}点タイムリー！</p>}
+                            <button onClick={nextAtBat} className="pointer-events-auto mt-4 bg-green-600 hover:bg-green-500 border-2 border-green-200 text-white font-bold py-2 px-8 rounded-full shadow-[0_4px_0_#14532d] transition-transform hover:-translate-y-0.5 active:translate-y-1 active:shadow-none">
+                                {outs >= 3 ? '攻守交代' : '次の打席へ'}
+                            </button>
+                        </div>
+                    )}
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
