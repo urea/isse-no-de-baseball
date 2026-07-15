@@ -4,9 +4,9 @@
 
 ## 遊ぶ
 
-GitHub Pages公開後は、次のURLで遊べます。
+ブラウザから、すぐに遊べます。
 
-`https://<GitHubユーザー名>.github.io/<リポジトリ名>/`
+[https://urea.github.io/isse-no-de-baseball/](https://urea.github.io/isse-no-de-baseball/)
 
 ## 遊び方
 
@@ -21,27 +21,6 @@ GitHub Pages公開後は、次のURLで遊べます。
 - キャラクターごとのセリフと選択傾向が、読み合いのヒントになる
 - 相手に勝つと、ブラウザのローカルストレージへ実績を保存。対戦相手選択画面に★が付く
 - インストール不要。スマートフォン・PCのモダンブラウザで動作
-
-## ローカルで遊ぶ
-
-`index.html`を直接開くか、ローカルサーバーを起動します。
-
-```powershell
-cd <リポジトリをcloneしたフォルダ>
-python -m http.server 4173 --bind 127.0.0.1
-```
-
-`http://127.0.0.1:4173/` をブラウザで開いてください。
-
-## GitHub Pagesで公開する
-
-このリポジトリはビルド不要の静的サイトです。GitHubへpushした後、リポジトリの **Settings → Pages** で次を指定します。
-
-- Source: `Deploy from a branch`
-- Branch: `main`
-- Folder: `/(root)`
-
-保存後、GitHub Pagesが公開URLを表示します。`.nojekyll`を含めているため、Jekyllによる不要な処理は行われません。
 
 ## 構成
 
